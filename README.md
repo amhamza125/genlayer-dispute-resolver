@@ -1,42 +1,43 @@
-# GenLayer Dispute Resolver v2
-
-<p align="center">
-  <img src="assets/logo.png" alt="GenLayer Dispute Resolver Logo" width="200px"/>
-</p>
+# GenLayer Dispute Resolver v3
 
 An on-chain dispute arbitration and escrow smart contract built for the GenLayer GenVM. This contract allows two parties to resolve disputes with authenticated participation, verifiable web-based evidence, and automated, enforceable staking settlements.
 
-## Key Features
+## 🔗 Key Features
 
 *   **Strict Party Authentication:** Binds the dispute to the exact transaction sender addresses. Only the explicitly named counterparty (Party B) can respond to an opened dispute, preventing third-party interference.
 *   **Verifiable Web Evidence (Oracle-less):** Both parties submit evidence via URLs. The contract utilizes GenLayer's `gl.nondet.web.render` to fetch the data directly on-chain without relying on centralized oracles.
 *   **AI Consensus Arbitration:** The dispute is evaluated using GenLayer's LLM equivalence principle (`gl.eq_principle.prompt_comparative`). Multiple validators independently analyze the evidence and must reach a consensus on the winner before state is committed.
-*   **Enforceable Settlement:** Both parties must stake GEN tokens to participate. Upon resolution, the combined pot is allocated to the winner using a secure pull-payment withdrawal pattern.
+*   **Intelligent Fallbacks (New):** If evidence is identical, unreachable, or evenly matched, the AI consensus safely returns an `INCONCLUSIVE` verdict, unlocking a dual-refund.
+*   **Enforceable Settlement & Timeouts (New):** Both parties must stake matching GEN tokens. If the counterparty abandons the dispute, strict ISO-8601 deadlines allow the initiator to reclaim their funds via default. 
 
-## Contract Workflow
+## 🔄 Contract Workflow
 
-1.  **Party A** calls `open_dispute(counterparty_address, evidence_url)` and stakes GEN.
-2.  **Party B** calls `respond_dispute(dispute_id, evidence_url)` and stakes a matching amount of GEN.
-3.  **Anyone** calls `resolve_dispute(dispute_id)`. The GenLayer validators fetch the URLs, process the LLM prompt, and reach consensus on a winner.
-4.  **The Winner** calls `withdraw()` to claim the combined staked pool.
+1.  **Party A** calls `open_dispute(counterparty, question, governing_terms, claim_a, evidence_url)` and stakes GEN.
+2.  **Party B** calls `respond_dispute(dispute_id, claim_b, evidence_url)` and stakes a strictly matching amount of GEN.
+3.  **Anyone** calls `resolve_dispute(dispute_id)`. The GenLayer validators fetch the URLs, process the LLM prompt against the governing terms, and reach consensus.
+4.  **The Winner(s)** calls `withdraw()` to claim the allocated staked pool.
 
-## Technical Changelog (v2 Updates)
+## 🛠️ Technical Changelog (v3 Updates)
 
-This version resolves the errors from the previous submission:
+This version resolves the structural and edge-case errors from the previous submission:
 
-1.  **FIXED:** GenVM `TreeMap` persistent storage initialization errors. Mappings are no longer re-instantiated in `__init__`.
-2.  **ADDED:** Pull-payment withdraw pattern with strict zero-balance checks to prevent double-spending exploits.
-3.  **IMPROVED:** LLM Prompt comparative logic to enforce a strict JSON output format (`{"winner": "A or B", "explanation": "..."}`).
+1.  **FIXED:** Nondeterministic LLM hallucinations. Added explicit `question` and `governing_terms` to the input to strictly bind the AI's reasoning.
+2.  **ADDED:** `INCONCLUSIVE` state logic. The AI can now safely reject a binary choice if evidence is insufficient, automatically triggering a refund to both parties.
+3.  **ADDED:** Statutory Timeouts. Integrated `claim_non_response` using GenVM deterministic clocks and Python's `datetime` module to release locked stakes if a party ghosts the dispute (300-second window).
+4.  **IMPROVED:** Replaced flexible stakes with hard-coded `msg.value` enforcement to prevent Party B from underfunding the arbitration pool.
 
-## Testing Workflow (GenLayer Studio)
+## 🧪 Testing Workflow (GenLayer Studio)
 
-To verify this contract in GenLayer Studio, follow this deterministic multi-wallet path:
+To verify the "Happy Path" of this contract in GenLayer Studio, follow this deterministic multi-wallet path:
 
 | Step | Action | Wallet | Parameters | Payable Value | Expected Outcome |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | `deploy` | Any | N/A | N/A | Contract address generated. |
-| **2** | `open_dispute` | **A** | `counterparty`: Wallet B address<br/>`evidence_url`: https://en.wikipedia.org/wiki/Eiffel_Tower | 10 GEN | Transaction SUCCESS. Returns `dispute_id: 1`. |
-| **3** | `respond_dispute`| **B** | `dispute_id`: 1<br/>`evidence_url`: https://en.wikipedia.org/wiki/Paris | 10 GEN | Transaction SUCCESS. (Reverts if called by Wallet A). |
-| **4** | `resolve_dispute`| Any | `dispute_id`: 1 | 0 GEN | Transaction SUCCESS. Status becomes `RESOLVED`. |
-| **5** | `get_dispute` | Any | `dispute_id`: 1 | N/A | Returns JSON with winner address and AI reasoning. |
-| **6** | `withdraw` | **Winner**| N/A | 0 GEN | Transaction SUCCESS. Winner's balance increases. |
+| 1 | `deploy` | Any | N/A | N/A | Contract address generated. |
+| 2 | `open_dispute` | A | `counterparty`: Wallet B address<br>`question`: "Did the dev deliver?"<br>`governing_terms`: "Must deliver code."<br>`claim_a`: "Nothing delivered."<br>`evidence_url`: https://... | 15 GEN | Transaction SUCCESS.<br>Returns `dispute_id: 1` |
+| 3 | `respond_dispute` | B | `dispute_id`: 1<br>`claim_b`: "I delivered it."<br>`evidence_url`: https://... | 15 GEN | Transaction SUCCESS.<br>(Reverts if stake doesn't match 15 GEN). |
+| 4 | `resolve_dispute` | Any | `dispute_id`: 1 | 0 GEN | Transaction SUCCESS. Status becomes `RESOLVED` or `INCONCLUSIVE`. |
+| 5 | `get_dispute` | Any | `dispute_id`: 1 | N/A | Returns JSON with winner address and AI reasoning. |
+| 6 | `withdraw` | Winner | N/A | 0 GEN | Transaction SUCCESS.<br>Winner's balance increases. |
+
+> **Note on Edge Cases:** For comprehensive proof of execution regarding Stake Mismatches, Non-Response Timeouts, and Inconclusive Refunds, please refer to the `TEST_REPORT.md` file located in this repository.
+> 
