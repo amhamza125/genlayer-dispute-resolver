@@ -15,7 +15,7 @@
 * **AI Consensus Justification:**
   > "Both parties submitted identical placeholder evidence from example.com... Neither claim is substantiated by the provided evidence. The governing terms require delivery of a functional React codebase... Without credible, distinguishable evidence from either side, no determination can be made."
 * **Fund Security Verified:** `get_withdrawable_balance` returned `15000000000000000000` (15 GEN) for both parties, proving safe dual-refund logic.
-* **Evidence Link:** [See Studio Output Screenshot]([test1_inconclusive.jpg](https://github.com/amhamza125/genlayer-dispute-resolver/blob/main/test1_inconclusive.jpg.jpg)
+* **Evidence Link:** [See Studio Output Screenshot](https://github.com/amhamza125/genlayer-dispute-resolver/blob/main/test1_inconclusive.jpg.jpg)
 
 ---
 
