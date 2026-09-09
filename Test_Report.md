@@ -27,7 +27,7 @@
   * Party A calls `claim_non_response(2)`.
 * **State Transition Verified:** `status` successfully updated to `DEFAULT_A`.
 * **Fund Security Verified:** `get_withdrawable_balance` returned `35000000000000000000` (35 GEN). This correctly reflects Party A's cumulative balance: the 15 GEN safely refunded from Test 1, plus the 20 GEN successfully reclaimed from Test 2.
-* **Evidence Link:** [See Timeout Claim Screenshot](test2_timeout.jpg)
+* **Evidence Link:** [See Timeout Claim Screenshot](https://github.com/amhamza125/genlayer-dispute-resolver/blob/main/test2_timeout.jpg.jpg)
 
 ---
 
@@ -38,5 +38,5 @@
   * Party B calls `respond_dispute(3)` with 10 GEN (underfunded).
 * **State Transition Verified:** Transaction immediately reverted.
 * **Error Trace:** `gl.vm.UserError: Stake mismatch: Must match exact required stake of 30000000000000000000`
-* **Evidence Link:** [See Revert Trace Screenshot](test3_mismatch.jpg)
+* **Evidence Link:** [See Revert Trace Screenshot](https://github.com/amhamza125/genlayer-dispute-resolver/blob/main/test3_mismatch.jpg.jpg)
 
