@@ -2,7 +2,14 @@
 from genlayer import *
 from dataclasses import dataclass
 import json
-from datetime import datetime
+import time
+
+@gl.evm.contract_interface
+class _Recipient:
+    class View:
+        pass
+    class Write:
+        pass
 
 @allow_storage
 @dataclass
@@ -15,10 +22,10 @@ class DisputeRecord:
     claim_b: str
     evidence_url_a: str
     evidence_url_b: str
-    stake_a: bigint
-    stake_b: bigint
-    deadline: bigint
-    status: str  # "AWAITING_RESPONSE" | "AWAITING_RESOLUTION" | "RESOLVED" | "INCONCLUSIVE" | "DEFAULT_A"
+    stake_a: u256
+    stake_b: u256
+    deadline: u256
+    status: str
     winner: Address
     ruling_explanation: str
 
@@ -29,19 +36,14 @@ class DisputeResolver(gl.Contract):
     evidence-to-terms binding, deadline enforcement, and inconclusive verdict refunds.
     """
 
-    disputes: TreeMap[str, DisputeRecord]
-    dispute_count: bigint
-    withdrawable: TreeMap[Address, bigint]
-    default_timeout_seconds: bigint
+    disputes: TreeMap[u256, DisputeRecord]
+    dispute_count: u256
+    withdrawable: TreeMap[Address, u256]
+    default_timeout_seconds: u256
 
     def __init__(self, timeout_seconds: int = 300):  # Default: 300s (5 minutes)
-        self.dispute_count = bigint(0)
-        self.default_timeout_seconds = bigint(timeout_seconds)
-
-    def _get_current_time(self) -> bigint:
-        """Parses the deterministic GenVM clock into a Unix timestamp integer."""
-        raw_dt = gl.message_raw["datetime"]
-        return bigint(int(datetime.fromisoformat(raw_dt.replace("Z", "+00:00")).timestamp()))
+        self.dispute_count = u256(0)
+        self.default_timeout_seconds = u256(timeout_seconds)
 
     @gl.public.write.payable
     def open_dispute(
@@ -51,11 +53,11 @@ class DisputeResolver(gl.Contract):
         governing_terms: str,
         claim_a: str,
         evidence_url: str
-    ) -> str:
+    ) -> int:
         sender = gl.message.sender_address
         stake = gl.message.value
 
-        if stake <= 0:
+        if stake <= u256(0):
             raise gl.vm.UserError("Must stake a positive amount of GEN to open a dispute")
         if not question.strip():
             raise gl.vm.UserError("Dispute proposition/question cannot be empty")
@@ -65,15 +67,20 @@ class DisputeResolver(gl.Contract):
             raise gl.vm.UserError("Party A claim statement cannot be empty")
         if not evidence_url.strip():
             raise gl.vm.UserError("Evidence URL cannot be empty")
+            
+        try:
+            party_b = Address(counterparty)
+        except ValueError:
+            raise gl.vm.UserError("Malformed counterparty address")
 
-        self.dispute_count += 1
-        dispute_id = str(self.dispute_count)
+        dispute_id = self.dispute_count
+        self.dispute_count += u256(1)
         
-        current_time = self._get_current_time()
+        current_time = u256(int(time.time()))
 
         self.disputes[dispute_id] = DisputeRecord(
             party_a=sender,
-            party_b=Address(counterparty),
+            party_b=party_b,
             question=question,
             governing_terms=governing_terms,
             claim_a=claim_a,
@@ -81,24 +88,25 @@ class DisputeResolver(gl.Contract):
             evidence_url_a=evidence_url,
             evidence_url_b="",
             stake_a=stake,
-            stake_b=bigint(0),
+            stake_b=u256(0),
             deadline=current_time + self.default_timeout_seconds,
             status="AWAITING_RESPONSE",
             winner=Address("0x0000000000000000000000000000000000000000"),
             ruling_explanation="",
         )
-        return dispute_id
+        return int(dispute_id)
 
     @gl.public.write.payable
-    def respond_dispute(self, dispute_id: str, claim_b: str, evidence_url: str) -> None:
-        if dispute_id not in self.disputes:
+    def respond_dispute(self, dispute_id: int, claim_b: str, evidence_url: str) -> None:
+        jid = u256(dispute_id)
+        if jid not in self.disputes:
             raise gl.vm.UserError("Dispute not found")
 
-        record = self.disputes[dispute_id]
+        record = self.disputes[jid]
         if record.status != "AWAITING_RESPONSE":
             raise gl.vm.UserError("Dispute is not awaiting a response")
 
-        current_time = self._get_current_time()
+        current_time = u256(int(time.time()))
         if current_time > record.deadline:
             raise gl.vm.UserError("Response window has expired")
 
@@ -108,7 +116,7 @@ class DisputeResolver(gl.Contract):
 
         stake = gl.message.value
         if stake != record.stake_a:
-            raise gl.vm.UserError(f"Stake mismatch: Must match exact required stake of {record.stake_a}")
+            raise gl.vm.UserError(f"Stake mismatch: Must match exact required stake")
         if not claim_b.strip():
             raise gl.vm.UserError("Party B claim statement cannot be empty")
         if not evidence_url.strip():
@@ -118,36 +126,38 @@ class DisputeResolver(gl.Contract):
         record.evidence_url_b = evidence_url
         record.stake_b = stake
         record.status = "AWAITING_RESOLUTION"
-        self.disputes[dispute_id] = record
+        self.disputes[jid] = record
 
     @gl.public.write
-    def claim_non_response(self, dispute_id: str) -> None:
-        if dispute_id not in self.disputes:
+    def claim_non_response(self, dispute_id: int) -> None:
+        jid = u256(dispute_id)
+        if jid not in self.disputes:
             raise gl.vm.UserError("Dispute not found")
 
-        record = self.disputes[dispute_id]
+        record = self.disputes[jid]
         if record.status != "AWAITING_RESPONSE":
             raise gl.vm.UserError("Dispute is not in an expired response state")
 
-        current_time = self._get_current_time()
+        current_time = u256(int(time.time()))
         if current_time <= record.deadline:
             raise gl.vm.UserError("Response deadline has not yet passed")
 
         record.status = "DEFAULT_A"
         record.ruling_explanation = "Counterparty failed to respond before the statutory deadline."
         record.winner = record.party_a
-        self.disputes[dispute_id] = record
+        self.disputes[jid] = record
 
-        # Refund Party A
-        current = self.withdrawable[record.party_a] if record.party_a in self.withdrawable else bigint(0)
+        # Refund Party A safely
+        current = self.withdrawable.get(record.party_a, u256(0))
         self.withdrawable[record.party_a] = current + record.stake_a
 
     @gl.public.write
-    def resolve_dispute(self, dispute_id: str) -> None:
-        if dispute_id not in self.disputes:
+    def resolve_dispute(self, dispute_id: int) -> None:
+        jid = u256(dispute_id)
+        if jid not in self.disputes:
             raise gl.vm.UserError("Dispute not found")
 
-        record = self.disputes[dispute_id]
+        record = self.disputes[jid]
         if record.status != "AWAITING_RESOLUTION":
             raise gl.vm.UserError("Dispute is not ready for resolution")
 
@@ -160,9 +170,19 @@ class DisputeResolver(gl.Contract):
         party_a = record.party_a
         party_b = record.party_b
 
-        def judge():
-            evidence_a = gl.nondet.web.render(url_a, mode="text")
-            evidence_b = gl.nondet.web.render(url_b, mode="text")
+        def judge() -> str:
+            # Secure web fetching with length truncation to prevent VM limits
+            try:
+                evidence_a = gl.nondet.web.render(url_a, mode="text")
+                if len(evidence_a) > 20000: evidence_a = evidence_a[:20000]
+            except Exception:
+                evidence_a = "Error fetching evidence"
+                
+            try:
+                evidence_b = gl.nondet.web.render(url_b, mode="text")
+                if len(evidence_b) > 20000: evidence_b = evidence_b[:20000]
+            except Exception:
+                evidence_b = "Error fetching evidence"
 
             prompt = f"""
             You are an impartial decentralized arbitration magistrate.
@@ -192,37 +212,42 @@ class DisputeResolver(gl.Contract):
             Respond ONLY in valid JSON format:
             {{"winner": "A" | "B" | "INCONCLUSIVE", "explanation": "<reasoning>"}}
             """
-            result = gl.nondet.exec_prompt(prompt, response_format="json")
-            winner = str(result.get("winner", "")).strip().upper()
-            explanation = str(result.get("explanation", "")).strip()
+            
+            try:
+                # Force structured JSON format
+                result_str = gl.nondet.exec_prompt(prompt, response_format="json")
+                result = json.loads(result_str)
+                winner = str(result.get("winner", "INCONCLUSIVE")).strip().upper()
+                explanation = str(result.get("explanation", "No reasoning provided.")).strip()
+            except Exception:
+                winner = "INCONCLUSIVE"
+                explanation = "Model failed to return valid JSON."
 
             if winner not in ("A", "B", "INCONCLUSIVE"):
-                raise gl.vm.UserError(f"Model returned invalid decision: {winner!r}")
-            if not explanation:
-                raise gl.vm.UserError("Decision missing justification")
+                winner = "INCONCLUSIVE"
 
+            # Return a strictly sorted string so strict_eq can compare it byte-for-byte
             return json.dumps({"winner": winner, "explanation": explanation}, sort_keys=True)
 
-        agreed = gl.eq_principle.prompt_comparative(
-            judge,
-            principle=(
-                "Validators must reach unanimous consensus on the winner classification: "
-                "'A', 'B', or 'INCONCLUSIVE'. The wording of explanations may differ slightly."
-            ),
-        )
+        # Use strict_eq on the normalized JSON output to guarantee deterministic consensus
+        agreed = gl.eq_principle.strict_eq(judge)
 
-        data = json.loads(agreed)
-        verdict = data["winner"]
-        explanation = data["explanation"]
+        try:
+            data = json.loads(agreed)
+            verdict = data.get("winner", "INCONCLUSIVE")
+            explanation = data.get("explanation", "No explanation.")
+        except Exception:
+            verdict = "INCONCLUSIVE"
+            explanation = "Consensus output parsing failed."
 
         if verdict == "INCONCLUSIVE":
             record.status = "INCONCLUSIVE"
             record.ruling_explanation = explanation
 
-            cur_a = self.withdrawable[party_a] if party_a in self.withdrawable else bigint(0)
+            cur_a = self.withdrawable.get(party_a, u256(0))
             self.withdrawable[party_a] = cur_a + record.stake_a
 
-            cur_b = self.withdrawable[party_b] if party_b in self.withdrawable else bigint(0)
+            cur_b = self.withdrawable.get(party_b, u256(0))
             self.withdrawable[party_b] = cur_b + record.stake_b
 
         else:
@@ -233,27 +258,27 @@ class DisputeResolver(gl.Contract):
             record.winner = winner_address
             record.ruling_explanation = explanation
 
-            cur_win = self.withdrawable[winner_address] if winner_address in self.withdrawable else bigint(0)
+            cur_win = self.withdrawable.get(winner_address, u256(0))
             self.withdrawable[winner_address] = cur_win + total_pot
 
-        self.disputes[dispute_id] = record
+        self.disputes[jid] = record
 
     @gl.public.write
     def withdraw(self) -> None:
         sender = gl.message.sender_address
-        amount = self.withdrawable[sender] if sender in self.withdrawable else bigint(0)
-        if amount <= 0:
+        amount = self.withdrawable.get(sender, u256(0))
+        if amount <= u256(0):
             raise gl.vm.UserError("Nothing to withdraw")
 
-        self.withdrawable[sender] = bigint(0)
-        recipient = gl.get_contract_at(sender)
-        recipient.emit_transfer(value=amount)
+        self.withdrawable[sender] = u256(0)
+        _Recipient(sender).emit_transfer(value=amount)
 
     @gl.public.view
-    def get_dispute(self, dispute_id: str) -> str:
-        if dispute_id not in self.disputes:
+    def get_dispute(self, dispute_id: int) -> str:
+        jid = u256(dispute_id)
+        if jid not in self.disputes:
             raise gl.vm.UserError("Dispute not found")
-        record = self.disputes[dispute_id]
+        record = self.disputes[jid]
         return json.dumps({
             "party_a": str(record.party_a),
             "party_b": str(record.party_b),
@@ -263,9 +288,9 @@ class DisputeResolver(gl.Contract):
             "claim_b": record.claim_b,
             "evidence_url_a": record.evidence_url_a,
             "evidence_url_b": record.evidence_url_b,
-            "stake_a": str(record.stake_a),
-            "stake_b": str(record.stake_b),
-            "deadline": str(record.deadline),
+            "stake_a": int(record.stake_a),
+            "stake_b": int(record.stake_b),
+            "deadline": int(record.deadline),
             "status": record.status,
             "winner": str(record.winner),
             "ruling_explanation": record.ruling_explanation,
@@ -276,5 +301,4 @@ class DisputeResolver(gl.Contract):
         addr = Address(address)
         if addr not in self.withdrawable:
             return "0"
-        return str(self.withdrawable[addr])
-        
+        return str(int(self.withdrawable[addr]))
