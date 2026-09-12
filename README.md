@@ -1,8 +1,7 @@
 # ⚖️ GenLayer Dispute Resolver
 
 [![GenLayer](https://img.shields.io/badge/Network-GenLayer-blue.svg)](https://genlayer.com/)
-[![Language](https://img.shields.io/badge/Language-Python_GenVM-ffd43b.svg)](https://docs.genlayer.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![Language](https://img.shields.io/badge/Language-Python_GenVM-ffd43b.svg)]
 
 **GenLayer Dispute Resolver** is an autonomous, on-chain arbitration protocol. It securely escrows GEN tokens from two parties and utilizes GenVM's decentralized AI validators to evaluate conflicting claims and external web evidence against user-defined governing terms. 
 
@@ -46,7 +45,3 @@ To test the full lifecycle of a dispute using [GenLayer Studio](https://studio.g
 
 * **Web Fetching Safety:** `gl.nondet.web.render` calls are wrapped in `try...except` blocks and lengths are truncated. If an external URL fails or returns a massive payload, it will not crash the VM; it safely degrades the string to trigger an `INCONCLUSIVE` verdict.
 * **Strict Type Safety:** Migrated all state variables to protocol-accurate `u256` integer casting, ensuring flawless GenVM compilation.
-
-## 📄 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
