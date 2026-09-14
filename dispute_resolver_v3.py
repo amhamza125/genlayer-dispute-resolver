@@ -214,35 +214,25 @@ class DisputeResolver(gl.Contract):
             """
             
             try:
-                # Force structured JSON format
                 result_str = gl.nondet.exec_prompt(prompt, response_format="json")
                 result = json.loads(result_str)
                 winner = str(result.get("winner", "INCONCLUSIVE")).strip().upper()
-                explanation = str(result.get("explanation", "No reasoning provided.")).strip()
             except Exception:
                 winner = "INCONCLUSIVE"
-                explanation = "Model failed to return valid JSON."
 
             if winner not in ("A", "B", "INCONCLUSIVE"):
                 winner = "INCONCLUSIVE"
 
-            # Return a strictly sorted string so strict_eq can compare it byte-for-byte
-            return json.dumps({"winner": winner, "explanation": explanation}, sort_keys=True)
+            # THE FIX: Only return the deterministic winner for the consensus payload. 
+            # Drop the explanation string to guarantee byte-for-byte agreement.
+            return winner
 
-        # Use strict_eq on the normalized JSON output to guarantee deterministic consensus
-        agreed = gl.eq_principle.strict_eq(judge)
-
-        try:
-            data = json.loads(agreed)
-            verdict = data.get("winner", "INCONCLUSIVE")
-            explanation = data.get("explanation", "No explanation.")
-        except Exception:
-            verdict = "INCONCLUSIVE"
-            explanation = "Consensus output parsing failed."
+        # Validators now only need to agree on "A", "B", or "INCONCLUSIVE"
+        verdict = gl.eq_principle.strict_eq(judge)
 
         if verdict == "INCONCLUSIVE":
             record.status = "INCONCLUSIVE"
-            record.ruling_explanation = explanation
+            record.ruling_explanation = "Validators reached consensus on an inconclusive outcome. Explanations omitted from state to guarantee byte-for-byte consensus."
 
             cur_a = self.withdrawable.get(party_a, u256(0))
             self.withdrawable[party_a] = cur_a + record.stake_a
@@ -256,10 +246,41 @@ class DisputeResolver(gl.Contract):
 
             record.status = "RESOLVED"
             record.winner = winner_address
-            record.ruling_explanation = explanation
+            record.ruling_explanation = f"Validators reached consensus on Party {verdict}. Explanations omitted from state to guarantee byte-for-byte consensus."
 
             cur_win = self.withdrawable.get(winner_address, u256(0))
             self.withdrawable[winner_address] = cur_win + total_pot
+
+        self.disputes[jid] = record
+
+    @gl.public.write
+    def refund_stuck_dispute(self, dispute_id: int) -> None:
+        """
+        Fallback path: If consensus continuously fails or the dispute is permanently stuck,
+        anyone can trigger a refund 24 hours after the original response deadline.
+        """
+        jid = u256(dispute_id)
+        if jid not in self.disputes:
+            raise gl.vm.UserError("Dispute not found")
+
+        record = self.disputes[jid]
+        if record.status != "AWAITING_RESOLUTION":
+            raise gl.vm.UserError("Dispute is not in a stuck resolution state")
+
+        current_time = u256(int(time.time()))
+        grace_period = u256(86400) # 24 hours
+        
+        if current_time <= record.deadline + grace_period:
+            raise gl.vm.UserError("Resolution grace period has not expired yet")
+
+        record.status = "CANCELED_REFUNDED"
+        record.ruling_explanation = "Dispute resolution timed out due to consensus failures. Stakes unlocked and refunded."
+
+        cur_a = self.withdrawable.get(record.party_a, u256(0))
+        self.withdrawable[record.party_a] = cur_a + record.stake_a
+
+        cur_b = self.withdrawable.get(record.party_b, u256(0))
+        self.withdrawable[record.party_b] = cur_b + record.stake_b
 
         self.disputes[jid] = record
 
