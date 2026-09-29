@@ -33,6 +33,7 @@ type Dispute = {
   ruling_explanation: string;
 };
 
+// GenLayer Studio Local Chain Configuration (Chain ID: 61999)
 const genlayerStudio = {
   id: 61999,
   name: "GenLayer Studio",
@@ -151,6 +152,7 @@ export default function Page() {
         throw new Error("No browser wallet found. Install or enable MetaMask.");
       }
 
+      // 1. Force MetaMask to switch to local RPC
       try {
         await window.ethereum.request({
           method: "wallet_switchEthereumChain",
@@ -163,7 +165,7 @@ export default function Page() {
             params: [
               {
                 chainId: "0xf22f",
-                chainName: "GenLayer Studio",
+                chainName: "GenLayer Studio Local",
                 nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
                 rpcUrls: ["http://127.0.0.1:8545"],
               },
@@ -174,15 +176,13 @@ export default function Page() {
         }
       }
 
+      // 2. Request accounts
       const result = (await window.ethereum.request({
         method: "eth_requestAccounts",
       })) as string[];
 
       const account = result?.[0];
       if (!account) throw new Error("Wallet did not return an account.");
-
-      const client = getWriteClient(account);
-      await (client as any).connect("local");
 
       setWallet(account);
       setNotice("Wallet connected to GenLayer Studio Local Chain.");
@@ -203,7 +203,6 @@ export default function Page() {
       }
 
       const client = getWriteClient(wallet);
-      await (client as any).connect("local");
 
       const call = {
         address: CONTRACT_ADDRESS as `0x${string}`,
