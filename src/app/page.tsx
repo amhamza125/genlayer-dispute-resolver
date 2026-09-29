@@ -182,7 +182,7 @@ export default function Page() {
       if (!account) throw new Error("Wallet did not return an account.");
 
       const client = getWriteClient(account);
-      await client.connect("local" as any);
+      await (client as any).connect("local");
 
       setWallet(account);
       setNotice("Wallet connected to GenLayer Studio Local Chain.");
@@ -203,7 +203,7 @@ export default function Page() {
       }
 
       const client = getWriteClient(wallet);
-      await client.connect("local" as any);
+      await (client as any).connect("local");
 
       const call = {
         address: CONTRACT_ADDRESS as `0x${string}`,
@@ -212,17 +212,18 @@ export default function Page() {
         value,
       };
 
-      const estimate = await client.estimateTransactionFeesForWrite(
+      // Bypassing TS strict checks for the SDK methods
+      const estimate = await (client as any).estimateTransactionFeesForWrite(
         call as any
       );
 
-      return client.writeContract({
+      return (client as any).writeContract({
         ...call,
         fees: {
           distribution: estimate.distribution,
           feeValue: estimate.feeValue,
         },
-      } as any);
+      });
     },
     [contractIsConfigured, wallet]
   );
@@ -271,7 +272,7 @@ export default function Page() {
 
     try {
       const client = getReadClient();
-      const result = await client.readContract({
+      const result = await (client as any).readContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
         functionName: "get_dispute",
         args: [id],
@@ -309,7 +310,7 @@ export default function Page() {
 
     try {
       const client = getReadClient();
-      const result = await client.readContract({
+      const result = await (client as any).readContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
         functionName: "get_withdrawable_balance",
         args: [wallet],
