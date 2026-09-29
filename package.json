@@ -4,7 +4,10 @@
   "description": "[![GenLayer](https://img.shields.io/badge/Network-GenLayer-blue.svg)](https://genlayer.com/) [![Language](https://img.shields.io/badge/Language-Python_GenVM-ffd43b.svg)]",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start"
   },
   "repository": {
     "type": "git",
@@ -23,5 +26,10 @@
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
   }
 }
