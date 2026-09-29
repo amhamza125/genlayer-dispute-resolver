@@ -33,7 +33,6 @@ type Dispute = {
   ruling_explanation: string;
 };
 
-// GenLayer Studio Local Chain Configuration (Chain ID: 61999)
 const genlayerStudio = {
   id: 61999,
   name: "GenLayer Studio",
@@ -49,7 +48,6 @@ const genlayerStudio = {
   },
 };
 
-// INTEGRATED CONTRACT ADDRESS
 const CONTRACT_ADDRESS =
   process.env.NEXT_PUBLIC_DISPUTE_CONTRACT_ADDRESS || "0x3e669262db812047a4c05da184e7942150969c51";
 
@@ -114,7 +112,7 @@ function getWriteClient(account: string) {
   return createClient({
     chain: genlayerStudio,
     account: account as `0x${string}`,
-    provider: window.ethereum as never,
+    provider: window.ethereum as any,
   });
 }
 
@@ -184,7 +182,7 @@ export default function Page() {
       if (!account) throw new Error("Wallet did not return an account.");
 
       const client = getWriteClient(account);
-      await client.connect("GenLayer Studio");
+      await client.connect("local" as any);
 
       setWallet(account);
       setNotice("Wallet connected to GenLayer Studio Local Chain.");
@@ -205,17 +203,17 @@ export default function Page() {
       }
 
       const client = getWriteClient(wallet);
-      await client.connect("GenLayer Studio");
+      await client.connect("local" as any);
 
       const call = {
         address: CONTRACT_ADDRESS as `0x${string}`,
         functionName,
-        args: args as never[],
+        args: args as any[],
         value,
       };
 
       const estimate = await client.estimateTransactionFeesForWrite(
-        call as never
+        call as any
       );
 
       return client.writeContract({
@@ -224,7 +222,7 @@ export default function Page() {
           distribution: estimate.distribution,
           feeValue: estimate.feeValue,
         },
-      } as never);
+      } as any);
     },
     [contractIsConfigured, wallet]
   );
@@ -244,7 +242,7 @@ export default function Page() {
         const txId = await writeContract(functionName, args, value);
         const tx = String(txId);
         setLastTx(tx);
-        setNotice(`${label} submitted. Wait for the GenLayer transaction to complete.`);
+        setNotice(`${label} submitted. Wait for the transaction to complete.`);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
