@@ -1,0 +1,27 @@
+{
+  "name": "genlayer-dispute-resolver",
+  "version": "1.0.0",
+  "description": "[![GenLayer](https://img.shields.io/badge/Network-GenLayer-blue.svg)](https://genlayer.com/) [![Language](https://img.shields.io/badge/Language-Python_GenVM-ffd43b.svg)]",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amhamza125/genlayer-dispute-resolver.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/amhamza125/genlayer-dispute-resolver/issues"
+  },
+  "homepage": "https://github.com/amhamza125/genlayer-dispute-resolver#readme",
+  "dependencies": {
+    "genlayer-js": "^1.1.8",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}
